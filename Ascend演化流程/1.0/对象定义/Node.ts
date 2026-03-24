@@ -5,6 +5,9 @@ export interface Node {
     /** 节点唯一标识 */
     id: string;
 
+    /** 本轮节点的常见比如：思考 学习 写作 等等 */
+    scenario: string;
+
     /** 节点标题：当前在推进什么 */
     title: string;
 
