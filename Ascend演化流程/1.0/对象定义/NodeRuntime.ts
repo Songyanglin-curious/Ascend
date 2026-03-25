@@ -1,4 +1,4 @@
-export type NodeMode = string;
+export type NodeMode = string | null;
 
 export interface NodeRuntime {
     /** 关联的节点 ID */

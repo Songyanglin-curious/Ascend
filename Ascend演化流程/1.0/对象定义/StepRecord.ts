@@ -5,9 +5,6 @@ export interface StepRecord {
     /** 关联的 Node */
     nodeId: string;
 
-    /** 本轮采用的模式 */
-    mode: string;
-
     /** 本轮输入 */
     input: string;
 
