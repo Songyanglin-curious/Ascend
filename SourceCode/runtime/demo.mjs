@@ -1,4 +1,4 @@
-﻿import {
+import {
   createProject,
   createRoundFromContext,
   createSolution,
@@ -9,6 +9,7 @@
   verifyProjectMinimalKernel,
 } from "./app.mjs";
 
+/** 用于演示当前端到端运行链路的示例节点。 */
 const node = {
   id: "node-1",
   scenario: "思考",
@@ -21,6 +22,7 @@ const node = {
   activeStatus: "启用",
 };
 
+/** 把示例节点放在根部的演示树结构。 */
 const tree = [{
   nodeId: "node-1",
   parentId: null,
@@ -28,7 +30,9 @@ const tree = [{
   children: [],
 }];
 
+/** 作为示例 Project 顶层容器的演示 Solution。 */
 const solution = createSolution({ id: "solution-1", goal: "demo goal" });
+/** 用来跑通当前最小工作流的演示 Project。 */
 const project = createProject({
   id: "project-1",
   solutionId: solution.id,
@@ -37,13 +41,16 @@ const project = createProject({
   nodes: [node],
   tree,
 });
+/** 注入示例 Project 后的演示 Solution 快照。 */
 const solutionWithProject = { ...solution, projects: [project] };
+/** 聚焦到示例 Project 的演示 Workspace。 */
 const workspace = createWorkspace({
   id: "workspace-1",
   solution: solutionWithProject,
   currentProjectId: project.id,
   currentEntry: "start",
 });
+/** 基于当前上下文对象构造出的演示 Round。 */
 const round = createRoundFromContext({
   id: "round-1",
   solution: solutionWithProject,
@@ -54,6 +61,7 @@ const round = createRoundFromContext({
   nextEntry: "continue",
 });
 
+/** 用于验证最小内核路径的演示运行结果。 */
 const verification = verifyProjectMinimalKernel({
   nodes: project.nodes,
   tree: project.tree,
@@ -66,6 +74,7 @@ const verification = verifyProjectMinimalKernel({
   },
 });
 
+/** 展示状态如何向上回流的 Workspace 级演示运行。 */
 const workspaceKernel = runWorkspaceFocusedProjectKernel({
   solution: solutionWithProject,
   workspace,
@@ -82,6 +91,7 @@ const workspaceKernel = runWorkspaceFocusedProjectKernel({
   },
 });
 
+/** 用于展示最小生命周期语义的演示生命周期更新。 */
 const lifecycleProject = setProjectLifecycleStage(project, "活跃");
 
 console.log(JSON.stringify({

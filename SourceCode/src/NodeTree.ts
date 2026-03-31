@@ -1,4 +1,5 @@
-﻿export interface NodeTree {
+/** NodeTree 描述 Project 内部节点之间的树关系。 */
+export interface NodeTree {
     /** 当前节点 ID */
     nodeId: string;
 

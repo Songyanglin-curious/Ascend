@@ -1,4 +1,4 @@
-﻿import fs from "node:fs";
+import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -21,13 +21,29 @@ import {
 } from "./app.mjs";
 import { generateDeepSeekAiStepDraft, generateDeepSeekFinishDraft, getLlmConfigPath } from "./llm.mjs";
 
+/**
+ * 这个 CLI 是当前仓库里最直接的运行入口。
+ *
+ * 它的主要作用不是复刻 docs 中完整运行规则，而是把当前最小实现串成
+ * 一个可落盘、可查看、可演示的状态机外壳：
+ * - 维护 runtime/.ascend-cli-state.json
+ * - 维护当前 project / focused node
+ * - 承接 step / ai-step / finish / new-node 这些演示级命令
+ *
+ * 也正因为它承担了“最先跑起来”的职责，很多当前偏差都集中体现在这里：
+ * - currentEntry 会在 nodeId 和 next 文本之间来回切换
+ * - status/show-state 会临时构造一个 round-current
+ * - finish 会直接改节点而不新增 stepRecord
+ */
 const runtimeDir = path.dirname(fileURLToPath(import.meta.url));
 const statePath = path.join(runtimeDir, ".ascend-cli-state.json");
 
+/** 在读写 CLI 状态文件前，确保运行目录已经存在。 */
 function ensureRuntimeDir() {
   fs.mkdirSync(path.dirname(statePath), { recursive: true });
 }
 
+/** 创建 `init/reset` 使用的默认演示节点。 */
 function createDefaultNode() {
   return {
     id: "node-1",
@@ -42,6 +58,7 @@ function createDefaultNode() {
   };
 }
 
+/** 创建指向默认节点的演示树根。 */
 function createDefaultTree() {
   return [{
     nodeId: "node-1",
@@ -51,7 +68,9 @@ function createDefaultTree() {
   }];
 }
 
+/** 创建 `init/reset` 使用的完整演示状态快照。 */
 function createInitialState() {
+  // init/reset 目前只是创建一个 demo 级初始状态，不是 docs 中“真实原始输入入场链”。
   const solution = createSolution({ id: "solution-1", goal: "demo goal" });
   const project = createProject({
     id: "project-1",
@@ -79,6 +98,7 @@ function createInitialState() {
   };
 }
 
+/** 根据当前 Project 中的节点推导下一个节点编号。 */
 function deriveNextNodeIndex(state) {
   const project = getCurrentProject(state);
   if (!project) {
@@ -95,6 +115,7 @@ function deriveNextNodeIndex(state) {
   return maxIndex + 1;
 }
 
+/** 标准化持久化状态对象，确保可选字段都有默认值。 */
 function normalizeState(state) {
   if (!state) {
     return null;
@@ -107,6 +128,7 @@ function normalizeState(state) {
   };
 }
 
+/** 如果状态文件存在，则从磁盘读取 CLI 状态。 */
 function readState() {
   if (!fs.existsSync(statePath)) {
     return null;
@@ -115,6 +137,7 @@ function readState() {
   return normalizeState(JSON.parse(fs.readFileSync(statePath, "utf8")));
 }
 
+/** 把 CLI 状态写入磁盘，并执行 `fsync` 保证落盘。 */
 function writeState(state) {
   ensureRuntimeDir();
   const fd = fs.openSync(statePath, "w");
@@ -126,6 +149,7 @@ function writeState(state) {
   }
 }
 
+/** 持久化状态到磁盘，并立即回读验证写入成功。 */
 function persistState(state) {
   writeState(state);
   const persistedState = readState();
@@ -136,6 +160,7 @@ function persistState(state) {
   return persistedState;
 }
 
+/** 读取命令参数，同时兼容 npm 转发参数的方式。 */
 function getCommandArgs() {
   const directArgs = process.argv.slice(3);
   const npmConfigArgvRaw = process.env.npm_config_argv;
@@ -153,6 +178,7 @@ function getCommandArgs() {
   }
 }
 
+/** 从当前内存态 CLI 状态中解析聚焦的 Project。 */
 function getCurrentProject(state) {
   if (!state?.solution || !state?.workspace) {
     return null;
@@ -161,12 +187,15 @@ function getCurrentProject(state) {
   return getSolutionProject(state.solution, state.workspace.currentProjectId ?? "");
 }
 
+/** 构造 CLI 状态展示里使用的当前 Round 视图。 */
 function getCurrentRound(state) {
   const currentProject = getCurrentProject(state);
   if (!currentProject) {
     return null;
   }
 
+  // 当前实现会在状态展示时临时捏出一个 round-current，
+  // 它更像“当前上下文快照”，并不严格等同于 docs 里的跨 Project Round。
   return createRoundFromContext({
     id: "round-current",
     solution: state.solution,
@@ -178,6 +207,7 @@ function getCurrentRound(state) {
   });
 }
 
+/** 输出当前 CLI 状态的简要摘要。 */
 function printStateSummary(state) {
   const currentProject = getCurrentProject(state);
   const currentRound = getCurrentRound(state);
@@ -206,10 +236,12 @@ function printStateSummary(state) {
   }
 }
 
+/** 以格式化 JSON 方式输出完整 CLI 状态。 */
 function printFullState(state) {
   console.log(JSON.stringify(state, null, 2));
 }
 
+/** 从命令参数、管道输入或交互式提问中解析一个输入值。 */
 async function promptInput(promptText, defaultValue, pipeValue, argValue) {
   if (typeof argValue === "string" && argValue.trim().length > 0) {
     return argValue.trim();
@@ -228,6 +260,7 @@ async function promptInput(promptText, defaultValue, pipeValue, argValue) {
   }
 }
 
+/** 在 TTY 环境里交互式收集一步推进草稿。 */
 async function promptDraftFromTty() {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
 
@@ -242,6 +275,7 @@ async function promptDraftFromTty() {
   }
 }
 
+/** 在管道模式下从标准输入读取一步推进草稿。 */
 function promptDraftFromPipe() {
   const lines = fs.readFileSync(0, "utf8").split(/\r?\n/);
   const [input = "input", output = "output", change = "change", next = "next"] = lines;
@@ -254,10 +288,12 @@ function promptDraftFromPipe() {
   };
 }
 
+/** 按当前运行环境选择合适的草稿输入方式。 */
 async function promptDraft() {
   return process.stdin.isTTY ? promptDraftFromTty() : promptDraftFromPipe();
 }
 
+/** 从 TTY 或管道输入中收集 finish 所需的总结与结论。 */
 async function promptFinishDraft(pipeLines = []) {
   if (process.stdin.isTTY) {
     const rl = createInterface({ input: process.stdin, output: process.stdout });
@@ -277,6 +313,7 @@ async function promptFinishDraft(pipeLines = []) {
   };
 }
 
+/** 解析聚焦的 Project；若不存在则抛出友好的错误。 */
 function getProjectFromStateOrThrow(state) {
   const currentProject = getCurrentProject(state);
   if (!currentProject) {
@@ -286,6 +323,7 @@ function getProjectFromStateOrThrow(state) {
   return currentProject;
 }
 
+/** 在 CLI 状态结构中替换当前 Project。 */
 function updateStateProject(state, project) {
   return {
     ...state,
@@ -293,6 +331,7 @@ function updateStateProject(state, project) {
   };
 }
 
+/** 解析当前聚焦节点；如果焦点无效则抛出错误。 */
 function getFocusedNodeOrThrow(project) {
   const focusedNode = project.nodes.find((node) => node.id === project.currentNodeId);
   if (!focusedNode) {
@@ -302,6 +341,7 @@ function getFocusedNodeOrThrow(project) {
   return focusedNode;
 }
 
+/** 把 Project 树展开成便于 CLI 打印的行结构。 */
 function collectProjectTreeRows(project) {
   const nodeMap = new Map(project.nodes.map((node) => [node.id, node]));
   const rows = [];
@@ -335,6 +375,8 @@ function collectProjectTreeRows(project) {
 
   for (const node of project.nodes) {
     if (!visited.has(node.id)) {
+      // CLI 会把“存在于 nodes 中、但没有挂进 tree 的节点”展示为孤立节点，
+      // 便于人工排查当前状态，而不是直接抛错中断。
       rows.push({
         node,
         treeNode: null,
@@ -349,14 +391,17 @@ function collectProjectTreeRows(project) {
   return rows;
 }
 
+/** 从展开后的树行里查找某个节点的树元信息。 */
 function getProjectNodeTreeInfo(project, nodeId) {
   return collectProjectTreeRows(project).find((row) => row.node.id === nodeId) ?? null;
 }
 
+/** 返回某个 Project 中指定节点关联的步骤记录。 */
 function getProjectNodeStepRecords(state, projectId, nodeId) {
   return (state.stepRecords ?? []).filter((record) => record.nodeId === nodeId && (record.projectId ? record.projectId === projectId : true));
 }
 
+/** 以树形视角输出当前聚焦 Project 的节点总览。 */
 function printProjectNodeList(state) {
   const project = getProjectFromStateOrThrow(state);
   const rows = collectProjectTreeRows(project);
@@ -372,6 +417,7 @@ function printProjectNodeList(state) {
   }
 }
 
+/** 输出单个节点详情及其关联的步骤记录。 */
 function printProjectNodeDetails(state, nodeId) {
   const project = getProjectFromStateOrThrow(state);
   const node = project.nodes.find((item) => item.id === nodeId);
@@ -406,6 +452,7 @@ function printProjectNodeDetails(state, nodeId) {
   });
 }
 
+/** 在不落盘的前提下模拟推进当前焦点节点，并返回下一状态。 */
 function planFocusedProjectStep(state, draft) {
   const currentProject = getProjectFromStateOrThrow(state);
   const focusedNodeId = currentProject.currentNodeId;
@@ -413,6 +460,7 @@ function planFocusedProjectStep(state, draft) {
     throw new Error("当前项目里没有可用的焦点节点。");
   }
 
+  // CLI 这里是“显式推进当前焦点节点”，不是完整 Scheduler 自动选点。
   const kernel = runProjectWorkflowKernel({
     project: currentProject,
     currentNodeId: focusedNodeId,
@@ -429,11 +477,13 @@ function planFocusedProjectStep(state, draft) {
   nextState.workspace = focusWorkspaceProject(state.workspace, kernel.project);
   nextState.workspace = {
     ...nextState.workspace,
+    // 这里把 workspace.currentEntry 回写成新的 next 文本。
     currentEntry: kernel.updatedNode.next,
   };
   nextState.stepRecords = [
     ...(state.stepRecords ?? []),
     {
+      // CLI 真实落盘会在类型定义之外额外补 projectId / createdAt。
       ...kernel.record,
       projectId: kernel.project.id,
       createdAt: new Date().toISOString(),
@@ -449,6 +499,7 @@ function planFocusedProjectStep(state, draft) {
   };
 }
 
+/** 真正推进当前焦点节点一步，并持久化结果状态。 */
 function runFocusedProjectStep(state, draft) {
   const planned = planFocusedProjectStep(state, draft);
   return {
@@ -457,18 +508,21 @@ function runFocusedProjectStep(state, draft) {
   };
 }
 
+/** 处理 `init` 命令。 */
 async function handleInit() {
   const state = persistState(createInitialState());
   console.log(`已初始化 CLI 状态：${statePath}`);
   printStateSummary(state);
 }
 
+/** 处理 `reset` 命令。 */
 async function handleReset() {
   const state = persistState(createInitialState());
   console.log(`已重置 CLI 状态：${statePath}`);
   printStateSummary(state);
 }
 
+/** 处理 `status` 命令。 */
 async function handleStatus() {
   const state = readState();
   if (!state) {
@@ -479,6 +533,7 @@ async function handleStatus() {
   printStateSummary(state);
 }
 
+/** 处理 `show-state` 命令。 */
 async function handleShowState() {
   const state = readState();
   if (!state) {
@@ -489,6 +544,7 @@ async function handleShowState() {
   printFullState(state);
 }
 
+/** 处理 `nodes / list-nodes` 命令。 */
 async function handleListNodes() {
   const state = readState();
   if (!state) {
@@ -499,6 +555,7 @@ async function handleListNodes() {
   printProjectNodeList(state);
 }
 
+/** 处理 `node / show-node` 命令。 */
 async function handleShowNode() {
   const state = readState();
   if (!state) {
@@ -515,6 +572,7 @@ async function handleShowNode() {
   printProjectNodeDetails(state, nodeId);
 }
 
+/** 处理手工 `step` 命令。 */
 async function handleStep() {
   const state = readState();
   if (!state) {
@@ -534,6 +592,7 @@ async function handleStep() {
   console.log(`状态文件：${statePath}`);
 }
 
+/** 处理 `new-node` 命令。 */
 async function handleNewNode() {
   const state = readState();
   if (!state) {
@@ -573,6 +632,7 @@ async function handleNewNode() {
   console.log(`状态文件：${statePath}`);
 }
 
+/** 处理 `focus-node` 命令。 */
 async function handleFocusNode() {
   const state = readState();
   if (!state) {
@@ -596,6 +656,7 @@ async function handleFocusNode() {
   console.log(`状态文件：${statePath}`);
 }
 
+/** 处理 AI 辅助的 `step` 命令，可选择仅预览不落盘。 */
 async function handleAiStep({ dryRun = false } = {}) {
   const state = readState();
   if (!state) {
@@ -605,6 +666,7 @@ async function handleAiStep({ dryRun = false } = {}) {
 
   const currentProject = getProjectFromStateOrThrow(state);
   const focusedNode = getFocusedNodeOrThrow(currentProject);
+  // 当前 AI step 只带最近几条 stepRecords，语境仍然是“轻量草稿生成”而非完整树级上下文。
   const recentStepRecords = (state.stepRecords ?? []).filter((record) => record.nodeId === focusedNode.id).slice(-3);
 
   const draft = await generateDeepSeekAiStepDraft({
@@ -639,6 +701,7 @@ async function handleAiStep({ dryRun = false } = {}) {
   console.log(`状态文件：${statePath}`);
 }
 
+/** 处理节点结束流程，可选用 AI 生成总结与结论。 */
 async function handleFinishNode({ aiMode: aiModeOverride = false } = {}) {
   const state = readState();
   if (!state) {
@@ -686,6 +749,7 @@ async function handleFinishNode({ aiMode: aiModeOverride = false } = {}) {
     conclusion: finishDraft.conclusion,
   });
 
+  // 当前 finish 只改 Project/Workspace，不会像 step 一样追加 stepRecord。
   const nextState = updateStateProject(state, updatedProject);
   nextState.workspace = focusWorkspaceProject(state.workspace, updatedProject);
   nextState.stepRecords = state.stepRecords ?? [];
@@ -696,6 +760,7 @@ async function handleFinishNode({ aiMode: aiModeOverride = false } = {}) {
   console.log(`状态文件：${statePath}`);
 }
 
+/** 输出 CLI 帮助文本。 */
 function printUsage() {
   console.log([
     "CLI 命令：",
@@ -724,6 +789,7 @@ function printUsage() {
   ].join("\n"));
 }
 
+/** CLI 主分发函数。 */
 async function main() {
   const [command] = process.argv.slice(2);
 

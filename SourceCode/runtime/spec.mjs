@@ -24,12 +24,15 @@ import {
 import { generateDeepSeekAiStepDraft, generateDeepSeekFinishDraft, getLlmConfigPath, readLlmConfig } from "./llm.mjs";
 import { main as runCliMain, planFocusedProjectStep, printProjectNodeDetails, printProjectNodeList } from "./cli.mjs";
 
+/** 轻量测试运行器收集到的全部测试用例。 */
 const tests = [];
 
+/** 向轻量测试运行器注册一个测试用例。 */
 function test(name, fn) {
   tests.push({ name, fn });
 }
 
+/** 创建多个测试共用的标准演示节点。 */
 function createDemoNode() {
   return {
     id: "node-1",
@@ -44,6 +47,7 @@ function createDemoNode() {
   };
 }
 
+/** 创建多个测试共用的标准演示树。 */
 function createDemoTree() {
   return [{
     nodeId: "node-1",
@@ -53,6 +57,7 @@ function createDemoTree() {
   }];
 }
 
+/** 创建一个聚焦到指定 Project 的演示 Workspace。 */
 function createDemoWorkspace(project) {
   return createWorkspace({ id: "workspace-1", solution: { id: "solution-1", goal: "demo goal", projects: [project] }, currentProjectId: project.id });
 }
@@ -60,6 +65,7 @@ function createDemoWorkspace(project) {
 const runtimeDir = fileURLToPath(new URL(".", import.meta.url));
 const cliScriptPath = fileURLToPath(new URL("./cli.mjs", import.meta.url));
 
+/** 在子进程中执行 CLI 入口，用于集成式测试。 */
 function runCliCommand(args, { preloadScript } = {}) {
   const spawnArgs = ["--experimental-strip-types"];
   if (preloadScript) {
@@ -77,6 +83,7 @@ function runCliCommand(args, { preloadScript } = {}) {
   });
 }
 
+/** 为 AI finish CLI 测试创建一个会 stub `fetch` 的预加载脚本。 */
 function createAiFinishPreloadFile() {
   const tempDir = fs.mkdtempSync(path.join(runtimeDir, "cli-ai-finish-"));
   const preloadPath = path.join(tempDir, "preload.mjs");
@@ -97,6 +104,7 @@ function createAiFinishPreloadFile() {
   );
   return { tempDir, preloadPath };
 }
+/** 在测试中覆盖全局 `fetch`，用于模拟远端调用。 */
 function setGlobalFetch(fetchImpl) {
   Object.defineProperty(globalThis, "fetch", {
     value: fetchImpl,
@@ -105,6 +113,7 @@ function setGlobalFetch(fetchImpl) {
   });
 }
 
+/** 在等待异步函数期间捕获 `console.log/error` 输出。 */
 async function captureConsoleAsync(fn) {
   const originalLog = console.log;
   const originalError = console.error;
@@ -378,6 +387,7 @@ test("step 草稿预览不落盘", () => {
 });
 
 
+/** 为同步测试辅助函数捕获 `console.log` 输出。 */
 function captureConsole(fn) {
   const originalLog = console.log;
   const lines = [];
