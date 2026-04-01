@@ -1,5 +1,5 @@
 {
-  "name": "TreeOS",
+  "name": "treeos",
   "version": "0.0.1",
   "description": "个人结构化认知操作系统,目标 → 结构化拆解 → 收敛判断。是借助AI放大个人生产力的工具",
   "main": "index.js",

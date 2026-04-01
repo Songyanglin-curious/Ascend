@@ -1,2 +1,1 @@
-runtime/.ascend-cli-state.json
-runtime/.ascend-llm.config.json
+node_modules/
