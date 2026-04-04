@@ -1,29 +1,30 @@
 {
-  "name": "treeos",
-  "version": "0.0.1",
-  "description": "个人结构化认知操作系统,目标 → 结构化拆解 → 收敛判断。是借助AI放大个人生产力的工具",
-  "main": "index.js",
-  "type": "module",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node index.js",
-    "typecheck": "tsc --noEmit",
-    "dev": "tsx index.js",
-    "build": "tsc -p tsconfig.json"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "packageManager": "pnpm@10.30.2",
-  "dependencies": {
-    "dotenv": "^17.3.1",
-    "g": "^2.0.1",
-    "openai": "^6.24.0",
-    "pnpm": "^10.30.2"
-  },
-  "devDependencies": {
-    "@types/node": "^25.3.1",
-    "tsx": "^4.21.0",
-    "typescript": "^5.9.3"
-  }
+    "name": "ascend",
+    "version": "0.0.1",
+    "description": "个人结构化认知操作系统,目标 → 结构化拆解 → 收敛判断。是借助AI放大个人生产力的工具",
+    "type": "module",
+    "scripts": {
+        "start": "node dist/index.js",
+        "test": "node --import tsx --test src/workflows/advance/workflow.test.ts",
+        "typecheck": "tsc --noEmit",
+        "dev": "tsx src/index.ts",
+        "build": "tsc -p tsconfig.json"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "packageManager": "pnpm@10.30.2",
+    "dependencies": {
+        "@langchain/core": "^1.1.39",
+        "@langchain/langgraph": "^1.2.7",
+        "dotenv": "^17.3.1",
+        "g": "^2.0.1",
+        "openai": "^6.24.0",
+        "pnpm": "^10.30.2"
+    },
+    "devDependencies": {
+        "@types/node": "^25.3.1",
+        "tsx": "^4.21.0",
+        "typescript": "^5.9.3"
+    }
 }
