@@ -8,17 +8,21 @@ export type Phase = "normal" | "await_c_intent" | "ended";
 export type WorkflowEndReason = "confirm" | "explicit_exit";
 
 export interface AgentState {
-  messages: BaseMessage[];
+  // 原始会话转录：用户真实输入 + assistant 实际输出 + 必要系统提醒。
+  rawMessages: BaseMessage[];
+  // 工作流真正依赖的分析上下文：只保留规范化后的问题与业务输出。
+  analysisMessages: BaseMessage[];
   rawInput: string;
   normalizedQuery: string;
   currentState: ProblemState;
   phase: Phase;
   shouldExit: boolean;
+  // 只保存最近一次业务 assistant 输出，不被 CLI 固定提醒覆盖。
   lastAssistantOutput: string;
 }
 
 export interface HandoffRecord {
-  messages: BaseMessage[];
+  rawMessages: BaseMessage[];
   endReason: WorkflowEndReason;
   currentState: ProblemState;
   lastAssistantOutput: string;
@@ -33,7 +37,11 @@ function appendMessages(left: BaseMessage[], right: BaseMessage[]): BaseMessage[
 }
 
 export const AdvanceStateAnnotation = Annotation.Root({
-  messages: Annotation<BaseMessage[]>({
+  rawMessages: Annotation<BaseMessage[]>({
+    reducer: appendMessages,
+    default: () => [],
+  }),
+  analysisMessages: Annotation<BaseMessage[]>({
     reducer: appendMessages,
     default: () => [],
   }),
@@ -68,7 +76,8 @@ export type AdvanceGraphUpdate = typeof AdvanceStateAnnotation.Update;
 
 export function createInitialAgentState(): AgentState {
   return {
-    messages: [],
+    rawMessages: [],
+    analysisMessages: [],
     rawInput: "",
     normalizedQuery: "",
     currentState: null,
@@ -83,7 +92,7 @@ export function buildHandoffRecord(
   endReason: WorkflowEndReason,
 ): HandoffRecord {
   return {
-    messages: [...state.messages],
+    rawMessages: [...state.rawMessages],
     endReason,
     currentState: state.currentState,
     lastAssistantOutput: state.lastAssistantOutput,

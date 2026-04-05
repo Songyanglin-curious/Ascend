@@ -10,6 +10,9 @@
 
 - 修改 [src/index.ts](D:/code/Ascend/src/index.ts)
 - 修改 [package.json](D:/code/Ascend/package.json)
+- 修改 [tasks/active/02-plan.md](D:/code/Ascend/tasks/active/02-plan.md)
+- 修改 [tasks/active/checklist.md](D:/code/Ascend/tasks/active/checklist.md)
+- 修改 [tasks/active/05-review.md](D:/code/Ascend/tasks/active/05-review.md)
 - 新增 [src/workflows/advance/types.ts](D:/code/Ascend/src/workflows/advance/types.ts)
 - 新增 [src/workflows/advance/prompts.ts](D:/code/Ascend/src/workflows/advance/prompts.ts)
 - 新增 [src/workflows/advance/model.ts](D:/code/Ascend/src/workflows/advance/model.ts)
@@ -17,6 +20,7 @@
 - 新增 [src/workflows/advance/graph.ts](D:/code/Ascend/src/workflows/advance/graph.ts)
 - 新增 [src/workflows/advance/cli.ts](D:/code/Ascend/src/workflows/advance/cli.ts)
 - 新增 [src/workflows/advance/workflow.test.ts](D:/code/Ascend/src/workflows/advance/workflow.test.ts)
+- 新增 [tasks/active/06-代码设计与学习说明.md](D:/code/Ascend/tasks/active/06-代码设计与学习说明.md)
 
 ## 实现计划
 
@@ -43,9 +47,17 @@
 
 ### 3. 模型接口与提示词组织
 
-- 在 `prompts.ts` 固化共享分析契约和 6 个节点提示词常量。
-- 在 `model.ts` 定义 `WorkflowModel` 接口：
-  - `complete(systemPrompt: string, userPrompt: string): Promise<string>`
+- 在 `model.ts` 定义中间层消息结构：
+  - `PromptRole = "system" | "user" | "assistant"`
+  - `PromptMessage = { role: PromptRole; content: string }`
+  - `WorkflowModel.complete(messages: PromptMessage[]): Promise<string>`
+- `DeepSeekWorkflowModel.complete()` 直接接收 `PromptMessage[]`，内部再映射到 OpenAI SDK 的 chat completions 参数。
+- 不向上层暴露 OpenAI 原生 message 类型，继续把 provider 细节封装在 `model.ts`。
+- 在 `prompts.ts` 固化共享分析契约和 6 个节点提示词常量，并把 prompt 构造改成“返回 `PromptMessage[]`”，不再把历史消息拍平成单个长字符串。
+- 新增把 `BaseMessage[]` 映射成 `PromptMessage[]` 的 helper，映射规则固定为：
+  - `human -> user`
+  - `ai -> assistant`
+  - 其他消息类型直接抛错，不做静默降级
 - `buildAdvanceGraph(model)` 只依赖 `WorkflowModel`，不依赖真实网络。
 - 全部自动化测试必须基于 `WorkflowModel` stub 跑通。
 - 真实 DeepSeek 适配单独放在 `createDeepSeekWorkflowModel()`，固定模型名 `deepseek-reasoner`。
@@ -58,25 +70,32 @@
 - `normalizeInputNode`：
   - 输入：`rawInput`
   - 输出：`normalizedQuery`
-  - 只做清洗归一化，空值返回字面量 `EMPTY`
+  - 继续只做清洗归一化，空值返回字面量 `EMPTY`
+  - 调模型时使用 `[system(normalize), user(rawInput)]`
 - `evaluateStateNode`：
   - 输入：`normalizedQuery`、`messages`
   - 输出：`currentState`
   - 只允许返回 `A/B/C`
+  - 调模型时使用 `[system(evaluate), ...historyMessages, user("当前规范化问题：...")]`
 - `actionANode`：
   - 输入：`normalizedQuery`、`currentState`、`messages`
   - 输出：assistant message、`lastAssistantOutput`
+  - 调模型时使用 `[system(actionA), ...historyMessages, user("当前规范化问题：...")]`
 - `actionBNode`：
   - 输入：`normalizedQuery`、`currentState`、`messages`
   - 输出：assistant message、`lastAssistantOutput`
+  - 调模型时使用 `[system(actionB), ...historyMessages, user("当前规范化问题：...")]`
 - `actionCNode`：
   - 输入：`normalizedQuery`、`currentState`、`messages`
   - 输出：assistant message、`lastAssistantOutput`、`phase=await_c_intent`
+  - 调模型时使用 `[system(actionC), ...historyMessages, user("当前规范化问题：...")]`
 - `recognizeIntentNode`：
-  - 输入：`rawInput`、`phase`、`messages`
+  - 输入：`rawInput`、`phase`、`lastAssistantOutput`
   - 输出：
     - `confirm` 时：`phase=ended`
     - `reject` 时：`phase=normal`、`currentState=null`
+  - 调模型时只使用 `[system(recognizeIntent), assistant(lastAssistantOutput), user(rawInput)]`
+  - 若进入节点时 `lastAssistantOutput` 为空，直接抛错，视为非法状态
 - 在 `graph.ts` 用 LangGraph `StateGraph` 组图。
 - 路由规则写死为：
   - `phase=normal` 时从 `normalizeInputNode` 开始
@@ -120,12 +139,25 @@
   - C 下 `reject` 复用同轮输入重评，且 user message 不重复
   - `await_c_intent` 下回车/语气词只提醒，不改状态，不进 `recognizeIntent`
   - 任意时点显式退出，统一产出 handoff
+  - `recognizeIntent` 调模型时只收到 3 条消息：`system + assistant(lastAssistantOutput) + user(rawInput)`
+  - `recognizeIntent` prompt 中当前 human 输入不会重复出现两次
 - 实现后验证命令固定为：
   - `pnpm test`
   - `pnpm typecheck`
   - `pnpm build`
 - 人工验收命令固定为：
   - `$env:DEEPSEEK_API_KEY='你的key'; pnpm dev`
+
+### 7. 注释与学习文档
+
+- 在 `src/index.ts`、`src/workflows/advance/types.ts`、`src/workflows/advance/model.ts`、`src/workflows/advance/nodes.ts`、`src/workflows/advance/graph.ts`、`src/workflows/advance/cli.ts` 中补充中文注释。
+- 注释只解释主路径、状态流转、Node.js 运行方式、LangGraph 关键概念和设计意图，不写逐行翻译式注释。
+- 新增 `tasks/active/06-代码设计与学习说明.md`，面向有 JavaScript 基础但不熟悉 Node.js / LangGraph 的读者，至少覆盖：
+  - 当前代码整体结构与调用链
+  - 为什么这样拆分类型、模型、节点、图、CLI
+  - Node.js 在这里负责什么，`dotenv`、`process.env`、`readline/promises`、`pnpm dev/test/build` 分别在做什么
+  - LangGraph 的 `Annotation.Root`、`StateGraph`、`START/END`、节点更新、条件边在这套实现里的对应关系
+  - `messages` 写入责任、`EMPTY` 语义、`confirm/reject` 同轮重评、统一 handoff 出口这几个关键设计
 
 ## 本次不修改的范围
 
@@ -142,6 +174,10 @@
 - `EMPTY` 只代表“当前轮无效”，不再与“工作流结束”混淆。
 - `HandoffRecord` 只由 CLI 统一出口生成。
 - `actionA/B/C` 都显式依赖 `normalizedQuery`、`currentState`、`messages`。
+- `evaluate / action / recognizeIntent` 已切到 `PromptMessage[]` 调用方式，不再依赖拍平历史字符串。
+- `recognizeIntent` 不再重复喂入当前输入。
+- 源码关键路径已有足够中文注释，可直接辅助阅读。
+- `tasks/active/06-代码设计与学习说明.md` 已补齐并能独立解释 Node.js 与 LangGraph 相关设计。
 - 测试、类型检查、构建全部通过后，计划才算达到可直接编码程度。
 
 ## 默认假设

@@ -1,32 +1,58 @@
 {
-  "version": "0.2.0",
-  "configurations": [
-    {
-      "name": "Debug current app (dist)",
-      "type": "node",
-      "request": "launch",
-      "program": "${workspaceFolder}/dist/index.js",
-      "preLaunchTask": "tsc: build - tsconfig.json",
-      "cwd": "${workspaceFolder}",
-      "outFiles": ["${workspaceFolder}/dist/**/*.js"],
-      "sourceMaps": true,
-      "envFile": "${workspaceFolder}/.env",
-      "skipFiles": ["<node_internals>/**"]
-    },
-    {
-      "name": "Debug current app (tsx)",
-      "type": "node",
-      "request": "launch",
-      "runtimeExecutable": "node",
-      "runtimeArgs": [
-        "--import",
-        "tsx",
-        "--enable-source-maps"
-      ],
-      "program": "${workspaceFolder}/src/index.ts",
-      "cwd": "${workspaceFolder}",
-      "envFile": "${workspaceFolder}/.env",
-      "skipFiles": ["<node_internals>/**"]
-    }
-  ]
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug current app (dist)",
+            "type": "node",
+            "request": "launch",
+            "program": "${workspaceFolder}/dist/index.js",
+            "preLaunchTask": "tsc: build - tsconfig.json",
+            "cwd": "${workspaceFolder}",
+            "outFiles": [
+                "${workspaceFolder}/dist/**/*.js"
+            ],
+            "sourceMaps": true,
+            "envFile": "${workspaceFolder}/.env.dev",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen"
+        },
+        {
+            "name": "Debug current app (tsx direct)",
+            "type": "node",
+            "request": "launch",
+            "runtimeExecutable": "npx",
+            "runtimeArgs": [
+                "tsx",
+                "src/index.ts"
+            ],
+            "cwd": "${workspaceFolder}",
+            "envFile": "${workspaceFolder}/.env.dev",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen"
+        },
+        {
+            "name": "Debug workflow test",
+            "type": "node",
+            "request": "launch",
+            "runtimeExecutable": "node",
+            "runtimeArgs": [
+                "--import",
+                "tsx",
+                "--test",
+                "src/workflows/advance/workflow.test.ts"
+            ],
+            "cwd": "${workspaceFolder}",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen"
+        }
+    ]
 }
