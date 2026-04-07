@@ -28,6 +28,15 @@ export interface HandoffRecord {
   lastAssistantOutput: string;
 }
 
+export interface AdvanceSceneRawResult {
+  rawMessages: BaseMessage[];
+  analysisMessages?: BaseMessage[];
+  endReason: WorkflowEndReason | null;
+  currentState: ProblemState;
+  phase?: Phase;
+  lastAssistantOutput: string;
+}
+
 function replaceWithLatest<T>(_: T, right: T): T {
   return right;
 }
@@ -96,6 +105,40 @@ export function buildHandoffRecord(
     endReason,
     currentState: state.currentState,
     lastAssistantOutput: state.lastAssistantOutput,
+  };
+}
+
+export function buildAdvanceSceneRawResult(
+  state: AgentState,
+  endReason: WorkflowEndReason | null,
+): AdvanceSceneRawResult {
+  return {
+    rawMessages: [...state.rawMessages],
+    analysisMessages: [...state.analysisMessages],
+    endReason,
+    currentState: state.currentState,
+    phase: state.phase,
+    lastAssistantOutput: state.lastAssistantOutput,
+  };
+}
+
+export function createContinuationStateFromRawResult(
+  rawResult: AdvanceSceneRawResult | null,
+): AgentState {
+  if (!rawResult) {
+    return createInitialAgentState();
+  }
+
+  return {
+    rawMessages: [...rawResult.rawMessages],
+    analysisMessages: [...(rawResult.analysisMessages ?? rawResult.rawMessages)],
+    rawInput: "",
+    normalizedQuery: "",
+    currentState: rawResult.currentState,
+    // 已结束节点在继续推进时应回到 normal 起点；未结束节点则按快照继续。
+    phase: (rawResult.phase ?? "ended") === "ended" ? "normal" : (rawResult.phase ?? "ended"),
+    shouldExit: false,
+    lastAssistantOutput: rawResult.lastAssistantOutput,
   };
 }
 

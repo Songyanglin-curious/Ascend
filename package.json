@@ -5,26 +5,42 @@
     "type": "module",
     "scripts": {
         "start": "node dist/index.js",
-        "test": "node --import tsx --test src/workflows/advance/workflow.test.ts",
+        "test": "node --import tsx --test src/workflows/advance/workflow.test.ts src/node-tree/node-tree.test.ts src/child-candidates/child-candidate.test.ts src/persistence/sqlite/sqlite-persistence.test.ts src/persistence/sqlite/migration.test.ts src/read-model/page-service.test.ts src/read-model/candidate-service.test.ts src/web-api/candidate-actions.test.ts src/web-api/node-advance-actions.test.ts",
         "typecheck": "tsc --noEmit",
         "dev": "tsx src/index.ts",
-        "build": "tsc -p tsconfig.json"
+        "build": "tsc -p tsconfig.json",
+        "page:web": "vite --config vite.config.ts",
+        "page:api": "tsx src/web-api/server.ts",
+        "page:dev": "concurrently \"npm run page:web\" \"npm run page:api\"",
+        "page:vite": "vite --config vite.config.ts",
+        "page:build": "tsc -p tsconfig.web.json --noEmit && vite build --config vite.config.ts"
     },
     "keywords": [],
     "author": "",
     "license": "ISC",
     "packageManager": "pnpm@10.30.2",
     "dependencies": {
+        "@assistant-ui/react": "^0.12.23",
         "@langchain/core": "^1.1.39",
         "@langchain/langgraph": "^1.2.7",
+        "@types/better-sqlite3": "^7.6.13",
+        "@xyflow/react": "^12.10.2",
+        "better-sqlite3": "^11.10.0",
         "dotenv": "^17.3.1",
         "g": "^2.0.1",
         "openai": "^6.24.0",
-        "pnpm": "^10.30.2"
+        "pnpm": "^10.30.2",
+        "react": "^19.2.4",
+        "react-dom": "^19.2.4"
     },
     "devDependencies": {
         "@types/node": "^25.3.1",
+        "@types/react": "^19.2.14",
+        "@types/react-dom": "^19.2.3",
+        "@vitejs/plugin-react": "^6.0.1",
+        "concurrently": "^9.2.1",
         "tsx": "^4.21.0",
-        "typescript": "^5.9.3"
+        "typescript": "^5.9.3",
+        "vite": "^8.0.4"
     }
 }

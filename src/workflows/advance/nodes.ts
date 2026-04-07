@@ -1,4 +1,4 @@
-import { AIMessage, HumanMessage } from "@langchain/core/messages";
+﻿import { AIMessage, HumanMessage } from "@langchain/core/messages";
 
 import {
   ACTION_A_SYSTEM_PROMPT,
@@ -6,11 +6,14 @@ import {
   ACTION_C_SYSTEM_PROMPT,
   buildActionPromptMessages,
   buildEvaluatePromptMessages,
-  buildNormalizePromptMessages,
   buildRecognizeIntentPromptMessages,
 } from "./prompts.js";
 import type { WorkflowModel } from "./model.js";
-import type { AgentState, ProblemState } from "./types.js";
+import {
+  EMPTY_NORMALIZED_QUERY,
+  type AgentState,
+  type ProblemState,
+} from "./types.js";
 
 export interface AdvanceNodes {
   normalizeInputNode(state: AgentState): Promise<Partial<AgentState>>;
@@ -31,7 +34,6 @@ function ensureNonEmptyOutput(output: string, nodeName: string): string {
 }
 
 function parseProblemState(output: string): Exclude<ProblemState, null> {
-  // evaluate 是纯判态节点，只接受 A/B/C 三个字面量。
   const normalized = output.trim().toUpperCase();
   if (normalized === "A" || normalized === "B" || normalized === "C") {
     return normalized;
@@ -57,7 +59,7 @@ function createAssistantUpdate(
   const normalized = ensureNonEmptyOutput(output, "动作节点");
 
   return {
-    // rawMessages 记录真实对外输出；analysisMessages 记录规范化问题与业务回复。
+    // rawMessages 记录真实对外输出；analysisMessages 只保留分析真正需要的语义消息。
     rawMessages: [new AIMessage(normalized)],
     analysisMessages: [
       new HumanMessage(state.normalizedQuery),
@@ -71,17 +73,16 @@ function createAssistantUpdate(
 export function createAdvanceNodes(model: WorkflowModel): AdvanceNodes {
   return {
     async normalizeInputNode(state) {
-      // normalize 只看当前输入，不依赖历史。
-      const output = await model.complete(buildNormalizePromptMessages(state.rawInput));
-      const normalized = ensureNonEmptyOutput(output, "normalizeInputNode");
+      // normalize 改为本地归一化，避免每轮额外消耗一次模型调用。
+      const normalized = state.rawInput.trim();
 
       return {
-        normalizedQuery: normalized,
+        normalizedQuery:
+          normalized === "" ? EMPTY_NORMALIZED_QUERY : normalized,
       };
     },
 
     async evaluateStateNode(state) {
-      // evaluate 会读取完整历史消息和本轮规范化问题，但只负责判态。
       const output = await model.complete(
         buildEvaluatePromptMessages(
           state.normalizedQuery,
@@ -128,14 +129,11 @@ export function createAdvanceNodes(model: WorkflowModel): AdvanceNodes {
       );
 
       return createAssistantUpdate(state, output, {
-        // 进入 await_c_intent 后，下一轮先判断 confirm / reject，
-        // 而不是直接重新评估 A/B/C。
         phase: "await_c_intent",
       });
     },
 
     async recognizeIntentNode(state) {
-      // recognizeIntent 只看上一轮 C 输出与当前原始回复，不依赖 analysisMessages。
       const lastAssistantOutput = state.lastAssistantOutput.trim();
       if (lastAssistantOutput === "") {
         throw new Error(
@@ -155,7 +153,6 @@ export function createAdvanceNodes(model: WorkflowModel): AdvanceNodes {
       }
 
       return {
-        // reject 不直接给用户输出，而是让图拿同一条输入回到主链继续重评。
         phase: "normal",
         currentState: null,
       };
